@@ -1,13 +1,13 @@
 export const setupGuide = {
   command: 'npm run setup',
   instructions: [
-    'Run npm run setup in the brightspace-mcp project directory in your own terminal. Do not send tokens or passwords to the assistant.',
-    'Sign in to Brightspace in your browser. Copy the origin from the address bar, for example https://learn.your-school.edu. The wizard also accepts a full Brightspace page URL and extracts the origin. Do not use your separate university SSO login host.',
-    'Obtain an OAuth access token for your own student account through an institution-approved registered application using the Authorization Code grant. The token is the access_token value in the OAuth token response, not your password, browser cookie, client secret, or authorization code.',
-    'If you do not have an approved application, contact your campus LMS/Brightspace administrator. Ask them to register or approve a student-facing Authorization Code application in Manage Extensibility > OAuth 2.0 and provide an approved authorization flow. Ordinary student accounts generally cannot register applications.',
-    'An administrator registers the application with a redirect URI matching the approved OAuth client and the four scopes listed below. Use that client to sign in, grant consent, and obtain your personal access token. This project does not yet perform that browser flow or exchange client credentials for tokens.',
-    'Keep the default API versions unless your administrator specifies supported alternatives. No course IDs are needed during setup; get_courses retrieves them after connecting.',
-    'The terminal wizard masks your token, validates the configuration, optionally checks enrollment access, and writes a private .env file. It asks before replacing an existing file. Restart your MCP client after setup or token replacement.',
+    'Run npm ci, npm run browser:install, then npm run setup in the brightspace-mcp project directory in your own terminal. Choose Browser login (recommended for students). Do not send passwords, tokens, or MFA codes to the assistant.',
+    'Copy your school’s Brightspace URL from the browser address bar. For CUNY use https://brightspace.cuny.edu. A full Brightspace page URL is accepted; the wizard extracts the origin. Do not use your separate university SSO login host.',
+    'Keep the default API versions unless your administrator specifies supported alternatives. No course IDs or OAuth application credentials are needed for browser mode.',
+    'The wizard writes a private .env file, then offers to open Chromium. Complete your school sign-in and MFA yourself, navigate to the Brightspace homepage, then confirm in the terminal. Enrollment access is verified before the session is saved.',
+    'Browser sessions are stored privately under ~/.brightspace-mcp/sessions/, bound to the exact Brightspace host. Passwords, MFA secrets, and SSO-provider cookies are not saved. This unofficial session integration may not work at every institution; CUNY live compatibility still requires testing.',
+    'Start the server with node --env-file=.env dist/index.js or configure your MCP client with absolute paths. When prompted to sign in again, run npm run login. Run npm run logout to remove the locally saved session. Sessions are reloaded by tools without restarting the server; changing .env requires a restart.',
+    'OAuth access-token mode is still available if your institution provides an approved registered application. Only that mode requires the scopes below and an access_token from an approved Authorization Code flow; the wizard masks the token. Browser login does not require copying a token.',
   ],
   scopes: ['enrollment:own_enrollment:read', 'dropbox:folders:read', 'grades:own_grades:read', 'content:toc:read'],
   oauth: {

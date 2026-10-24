@@ -12,14 +12,14 @@ export function createServer(client?: BrightspaceClient) {
   });
   const run = async (action: (client: BrightspaceClient) => Promise<unknown>) => {
     try {
-      if (!client) throw new BrightspaceError('Brightspace is not configured. Call setup for instructions, run npm run setup in your terminal, then restart with the generated .env file.');
+      if (!client) throw new BrightspaceError('Brightspace is not configured. Call setup for instructions, run npm run setup in your terminal and choose browser login, then restart with the generated .env file.');
       return { content: [{ type: 'text' as const, text: JSON.stringify(await action(client), null, 2) }] };
     } catch (error) {
       return { isError: true, content: [{ type: 'text' as const, text: error instanceof BrightspaceError ? error.message : 'Unable to complete Brightspace operation.' }] };
     }
   };
   server.registerTool('setup', {
-    description: 'Get guided setup instructions and learn where to find the Brightspace URL and OAuth token. Never ask the user to share tokens in chat; direct them to the local interactive terminal wizard. Available before configuration.',
+    description: 'Get guided setup instructions for normal browser login (recommended) or optional OAuth access-token configuration. Never ask the user to share tokens in chat; direct them to the local interactive terminal wizard. Available before configuration.',
     inputSchema: {}, annotations,
   }, async () => ({ content: [{ type: 'text' as const, text: JSON.stringify({ ...setupGuide, configured: !!client }, null, 2) }] }));
   server.registerTool('get_courses', {

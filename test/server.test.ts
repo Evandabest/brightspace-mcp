@@ -66,3 +66,20 @@ test('unconfigured stdio server offers setup and actionable errors without needi
     assert.match(JSON.stringify(courses.content), /not configured/);
   } finally { await client.close(); }
 });
+
+test('browser-mode stdio starts without an OAuth token and explains missing login', async () => {
+  const client = new Client({ name: 'browser-mode-test', version: '1.0.0' });
+  const transport = new StdioClientTransport({
+    command: process.execPath, args: ['--import', 'tsx', 'src/index.ts'],
+    env: { PATH: process.env.PATH ?? '', BRIGHTSPACE_BASE_URL: 'https://no-session-mcp-integration.invalid', BRIGHTSPACE_AUTH_MODE: 'browser' }, stderr: 'pipe',
+  });
+  try {
+    await client.connect(transport);
+    const setup = await client.callTool({ name: 'setup', arguments: {} });
+    assert.match(JSON.stringify(setup.content), /Browser login/);
+    const courses = await client.callTool({ name: 'get_courses', arguments: {} });
+    assert.equal(courses.isError, true);
+    assert.match(JSON.stringify(courses.content), /npm run login/);
+    assert.ok(!JSON.stringify(courses.content).includes('ACCESS_TOKEN'));
+  } finally { await client.close(); }
+});

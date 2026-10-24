@@ -23,7 +23,8 @@
     "setup": "npm run build && node dist/index.js setup",
     "login": "npm run build && node --env-file-if-exists=.env dist/index.js login",
     "logout": "npm run build && node --env-file-if-exists=.env dist/index.js logout",
-    "browser:install": "playwright install chromium"
+    "browser:install": "playwright install chromium",
+    "test:browser": "node --import tsx --test test/browser.integration.ts"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.7.4",

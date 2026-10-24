@@ -6,3 +6,8 @@ dist/
 coverage/
 *.log
 .DS_Store
+
+# Local session credentials and browser artifacts
+.brightspace-mcp/
+playwright/.auth/
+.playwright-cli/
