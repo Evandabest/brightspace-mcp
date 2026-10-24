@@ -23,7 +23,8 @@ try {
     try {
       const config = loadConfig();
       const fetcher = config.authMode === 'browser' ? (await import('./browser-auth.js')).sessionFetch(config) : fetch;
-      client = new BrightspaceClient(config, fetcher);
+      const fileFetcher = config.authMode === 'browser' ? (await import('./browser-auth.js')).sessionDownloadFetch(config) : fetch;
+      client = new BrightspaceClient(config, fetcher, fileFetcher);
     }
     catch (error) { console.error(`${error instanceof Error ? error.message : 'Configuration unavailable'} Run npm run setup in your terminal, or call the setup MCP tool for instructions.`); }
     const server = createServer(client);

@@ -98,3 +98,42 @@ export async function captureSession(context: BrowserContext, config: Config): P
     if (!cookies.some(c => c.name === 'd2lSessionVal' && c.value)) throw new Error('No Brightspace session found. Finish signing in and run npm run login again.');
     return { baseUrl: config.baseUrl, cookies, csrfToken, savedAt: new Date().toISOString() };
 }
+
+/** Native streaming file requests; never forward cookies or tokens off the configured tenant. */
+export function sessionDownloadFetch(
+  config: Config, load: () => Promise<Session> = () => readSession(config),
+  fetcher: typeof fetch = fetch,
+): typeof fetch {
+  return async (input, init) => {
+    const url = new URL(String(input));
+    if (url.origin !== config.baseUrl || init?.method !== 'GET' ||
+        (!url.pathname.startsWith('/d2l/api/') && !url.pathname.startsWith('/content/enforced/'))) {
+      throw new BrightspaceError('Download requests must be GETs to this Brightspace tenant.');
+    }
+    let session: Session;
+    try { session = await load(); } catch { throw new BrightspaceError('Run npm run login before downloading course files.'); }
+    const cookies = session.cookies.filter(cookie => cookie.domain.replace(/^\./, '') === url.hostname &&
+      (cookie.expires < 0 || cookie.expires > Date.now() / 1000) &&
+      (url.pathname === cookie.path || url.pathname.startsWith(cookie.path.endsWith('/') ? cookie.path : `${cookie.path}/`)));
+    const headers: Record<string, string> = { Accept: '*/*', Cookie: cookies.map(c => `${c.name}=${c.value}`).join('; ') };
+    if (session.csrfToken) headers['x-csrf-token'] = session.csrfToken;
+    const get = () => fetcher(url, { method: 'GET', headers, redirect: 'manual', signal: init?.signal ?? AbortSignal.timeout(60_000) });
+    let response = await get();
+    if ([401, 403].includes(response.status) && session.csrfToken) {
+      const context = await request.newContext({ storageState: { cookies: session.cookies, origins: [] } });
+      try {
+        const token = await mintToken(context, config, session.csrfToken);
+        if (token) {
+          await response.body?.cancel();
+          headers.Authorization = `Bearer ${token}`;
+          response = await get();
+        }
+      } finally { await context.dispose(); }
+    }
+    if (response.status === 401) {
+      await response.body?.cancel();
+      throw new BrightspaceError('Browser session expired. Run npm run login before downloading files.');
+    }
+    return response;
+  };
+}

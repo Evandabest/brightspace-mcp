@@ -22,8 +22,8 @@ test('MCP handshake, tool discovery, tool calls, validation, and error responses
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 7);
-    assert.ok(tools.every(tool => tool.annotations?.readOnlyHint));
+    assert.equal(tools.length, 10);
+    assert.ok(tools.filter(tool => tool.name !== 'download_document').every(tool => tool.annotations?.readOnlyHint));
     const result = await client.callTool({ name: 'get_grades', arguments: { course_id: '123' } });
     assert.equal(result.isError, true);
     assert.match(JSON.stringify(result.content), /403/);
@@ -43,7 +43,7 @@ test('actual stdio entrypoint initializes without polluting protocol stdout', as
   try {
     await client.connect(transport);
     const result = await client.listTools();
-    assert.equal(result.tools.length, 7);
+    assert.equal(result.tools.length, 10);
   } finally { await client.close(); }
 });
 
