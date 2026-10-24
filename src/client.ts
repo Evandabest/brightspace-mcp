@@ -229,10 +229,18 @@ export class BrightspaceClient {
         const module = z.object({ Title: z.string(), Topics: z.array(z.unknown()).optional(), Modules: z.array(z.unknown()).optional() }).parse(value);
         const path = [...parents, module.Title];
         for (const value of module.Topics ?? []) {
-          const topic = z.object({ TopicId: z.number(), Title: z.string(), TopicType: z.number(), Url: z.string().nullable().optional() }).passthrough().parse(value);
-          documents.push({ courseId, topicId: String(topic.TopicId), title: topic.Title, modulePath: path, topicType: topic.TopicType,
-            url: topic.Url ?? null, downloadable: topic.TopicType === 1,
-            nextStep: topic.TopicType === 1 ? 'download_document with source=content_topic and topic_id' : 'get_content_topic to inspect the link; external services may require their own login' });
+          const topic = z.object({ TopicId: z.number(), Title: z.string(), TopicType: z.number().optional(), ActivityType: z.number().optional(), Url: z.string().nullable().optional() }).passthrough().parse(value);
+          const isFile = topic.TopicType === 1 || topic.ActivityType === 1;
+          let isCourseLink = false;
+          if (topic.Url) {
+            try {
+              const url = new URL(topic.Url, this.config.baseUrl);
+              isCourseLink = url.origin === this.config.baseUrl && new RegExp(`^/content/enforced/${id.parse(courseId)}(?:-|/)`).test(url.pathname);
+            } catch { /* Invalid link remains non-downloadable. */ }
+          }
+          documents.push({ courseId, topicId: String(topic.TopicId), title: topic.Title, modulePath: path, topicType: topic.TopicType ?? null, activityType: topic.ActivityType ?? null,
+            url: topic.Url ?? null, downloadable: isFile || isCourseLink, downloadSource: isFile ? 'content_topic' : isCourseLink ? 'course_file' : null,
+            nextStep: isFile ? 'download_document with source=content_topic and topic_id' : isCourseLink ? 'download_document with source=course_file and url' : 'get_content_topic to inspect the link; external services may require their own login' });
         }
         visit(module.Modules ?? [], path, depth + 1);
       }

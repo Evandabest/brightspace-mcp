@@ -118,3 +118,14 @@ test('browser downloads stream with tenant-scoped live cookies and never follow 
   await assert.rejects(fetcher('https://external.example/content/enforced/123/x.pdf', { method: 'GET' }));
   assert.equal(calls, 1);
 });
+
+test('CUNY TOC activity types identify documents without TopicType and detect course-file links', async () => {
+  const client = new BrightspaceClient(config, async () => json({ Modules: [{ Title: 'Module', Modules: [], Topics: [
+    { TopicId: 1, Title: 'Slides', ActivityType: 1, Url: '/content/enforced/123-course/slides.pdf' },
+    { TopicId: 2, Title: 'Linked file', ActivityType: 2, Url: '/content/enforced/123-course/handout.docx' },
+    { TopicId: 3, Title: 'Quiz', ActivityType: 4, Url: '/d2l/lms/quizzing/quiz.d2l' },
+  ] }] }));
+  const { documents } = await client.listCourseDocuments('123');
+  assert.deepEqual(documents.map(doc => doc.downloadable), [true, true, false]);
+  assert.deepEqual(documents.map(doc => doc.downloadSource), ['content_topic', 'course_file', null]);
+});
