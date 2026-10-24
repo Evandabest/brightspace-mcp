@@ -101,18 +101,19 @@ export function createServer(client?: BrightspaceClient) {
   }, ({ course_id, topic_id }) => run(client => client.getContentTopic(course_id, topic_id)));
   server.registerTool('list_course_documents', {
     description: 'Find visible documents and links throughout nested course modules. Returns titles, module paths, topic IDs, URLs and download guidance. External services may require their own login.',
-    inputSchema: { course_id: courseId }, annotations,
-  }, ({ course_id }) => run(client => client.listCourseDocuments(course_id)));
+    inputSchema: { course_id: courseId, file_type: z.enum(['all', 'pdf']).default('all').describe('Use pdf to find PDFs by title/URL extension; files without extension metadata may be omitted.') }, annotations,
+  }, ({ course_id, file_type }) => run(client => client.listCourseDocuments(course_id, file_type)));
   server.registerTool('download_document', {
-    description: 'Download a course document to a local private file (50 MiB limit) and return its absolute path, MIME type, size and SHA-256. Then open that file using your local document/PDF tools. Supports course file topics; assignment, announcement, discussion attachments; own submitted files; and direct same-course Brightspace /content/enforced/ links. Does not execute files or send credentials to external hosts. Never overwrites existing files.',
+    description: 'Download a course document to a local private file (50 MiB limit) and return its absolute path, MIME type, size and SHA-256. Then open that file using your local document/PDF tools. Supports course file topics; assignment, announcement, discussion attachments; own submitted files; and direct same-course Brightspace /content/enforced/ links. Does not execute files or send credentials to external hosts. Never overwrites existing files. Set pdf_only=true to require PDF bytes; this validates the file and does not convert Word or slides to PDF.',
     inputSchema: {
       course_id: courseId, source: z.enum(['content_topic', 'assignment_attachment', 'announcement_attachment', 'discussion_attachment', 'submission_file', 'course_file']),
       topic_id: z.string().regex(/^\d+$/).optional(), assignment_id: z.string().regex(/^\d+$/).optional(),
       announcement_id: z.string().regex(/^\d+$/).optional(), forum_id: z.string().regex(/^\d+$/).optional(),
       post_id: z.string().regex(/^\d+$/).optional(), submission_id: z.string().regex(/^\d+$/).optional(), file_id: z.string().regex(/^\d+$/).optional(),
+      pdf_only: z.boolean().default(false).describe('Require a PDF file, validate its signature and save with a .pdf extension. Does not convert other formats.'),
       url: z.string().max(8192).optional(), destination_dir: z.string().min(1).max(4096).optional().describe('Optional local destination directory; defaults to ~/Downloads/brightspace-mcp/<course_id>'),
     }, annotations: { ...annotations, readOnlyHint: false, idempotentHint: false },
-  }, ({ course_id, source, destination_dir, ...ids }) => run(client => client.downloadDocument(source, course_id, ids, destination_dir)));
+  }, ({ course_id, source, destination_dir, pdf_only, ...ids }) => run(client => client.downloadDocument(source, course_id, ids, destination_dir, pdf_only)));
   server.registerTool('get_upcoming_deadlines', {
     description: 'Find assignment dropbox due dates over the next N days for specified courses. Reports course errors explicitly; excludes quizzes, calendar events, and assignments without due dates. Does not determine submission status or completion.',
     inputSchema: { course_ids: z.array(courseId).min(1).max(50), days: z.number().int().min(1).max(365).default(14) }, annotations,

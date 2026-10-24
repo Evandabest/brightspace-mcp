@@ -14,7 +14,7 @@ export function safeFilename(disposition: string | null, fallback: string) {
 }
 
 /** Stream to an exclusive private file; remove partial files on every failure. */
-export async function saveDownload(response: Response, directory: string, fallback: string, maxBytes = MAX_DOWNLOAD_BYTES) {
+export async function saveDownload(response: Response, directory: string, fallback: string, maxBytes = MAX_DOWNLOAD_BYTES, pdfOnly = false) {
   if (!response.ok) {
     await response.body?.cancel();
     throw new BrightspaceError(`Download failed (HTTP ${response.status}). Check file access and sign in again if needed.`);
@@ -25,13 +25,15 @@ export async function saveDownload(response: Response, directory: string, fallba
     throw new BrightspaceError(`Document exceeds the ${Math.floor(maxBytes / 1024 / 1024)} MiB download limit.`);
   }
   if (!response.body) throw new BrightspaceError('The download returned no file data.');
-  const name = safeFilename(response.headers.get('content-disposition'), fallback);
+  let name = safeFilename(response.headers.get('content-disposition'), fallback);
+  if (pdfOnly && !/\.pdf$/i.test(name)) name += '.pdf';
   const targetDirectory = resolve(directory);
   await mkdir(targetDirectory, { recursive: true, mode: 0o700 });
   const path = join(targetDirectory, `${randomUUID()}-${name}`);
   const file = await open(path, 'wx', 0o600);
   const reader = response.body.getReader();
   let bytes = 0;
+  const prefix: number[] = [];
   const hash = createHash('sha256');
   try {
     while (true) {
@@ -39,11 +41,16 @@ export async function saveDownload(response: Response, directory: string, fallba
       if (done) break;
       bytes += value.byteLength;
       if (bytes > maxBytes) throw new BrightspaceError('Document exceeds the download size limit.');
+      if (pdfOnly && prefix.length < 5) {
+        prefix.push(...value.subarray(0, 5 - prefix.length));
+        if (prefix.length === 5 && Buffer.from(prefix).toString('ascii') !== '%PDF-') throw new BrightspaceError('This document is not a PDF. Select a PDF course file; automatic conversion is not enabled.');
+      }
       hash.update(value);
       await file.writeFile(value);
     }
     if (bytes === 0) throw new BrightspaceError('The download returned an empty file.');
-    return { path, filename: name, bytes, mimeType: response.headers.get('content-type') ?? 'application/octet-stream', sha256: hash.digest('hex') };
+    if (pdfOnly && prefix.length < 5) throw new BrightspaceError('The file is not a valid PDF download.');
+    return { path, filename: name, bytes, mimeType: pdfOnly ? 'application/pdf' : response.headers.get('content-type') ?? 'application/octet-stream', sha256: hash.digest('hex') };
   } catch (error) {
     await reader.cancel().catch(() => {});
     await file.close();

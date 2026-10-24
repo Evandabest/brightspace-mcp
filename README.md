@@ -121,6 +121,8 @@ The normal workflow is `get_courses` → `list_course_documents` → `download_d
 
 `download_document` saves the bytes locally and returns an absolute `path`, MIME type, size, and SHA-256. The coding agent can then open that path with its normal PDF, Word, presentation, or text-reading tools. Downloading does not itself extract text or summarize the document.
 
+For PDFs, ask “Find and download the PDF lecture notes for this course.” Use `list_course_documents` with `file_type="pdf"` to filter recognizable PDF titles/URLs, then `download_document` with `pdf_only=true`. PDF-only mode checks the actual `%PDF-` signature (including headers split across streamed chunks), saves with a `.pdf` extension, and rejects non-PDF files instead of renaming them. PDFs whose type is missing from title/URL metadata may be absent from the filter; use the full listing and PDF-only validation when needed. Word/PowerPoint-to-PDF conversion is not implemented.
+
 Files default to `~/Downloads/brightspace-mcp/<course_id>/`. Supply `destination_dir` to save inside your coding workspace instead, particularly when the agent cannot read outside that workspace. Filenames are sanitized and prefixed with a unique ID, existing files are never overwritten, and files are created with owner-only permissions on POSIX systems. Files are streamed with a **50 MiB per-file limit**. Failed or interrupted downloads remove the partial file.
 
 | `source` | Required IDs or URL (in addition to `course_id`) | Where to find them |
@@ -145,8 +147,8 @@ Submission downloads verify that the selected submission/file belongs to the aut
 | `get_grades` | `course_id` | The authenticated student's grade values |
 | `get_course_content` | `course_id` | Visible table of contents, modules, topics, links |
 | `get_content_topic` | `course_id`, `topic_id` | Topic metadata, description, and URL |
-| `list_course_documents` | `course_id` | Documents and links throughout nested modules, with download guidance |
-| `download_document` | `course_id`, `source`, source-specific IDs; optional `destination_dir` | Local file path, filename, bytes, MIME type, SHA-256 |
+| `list_course_documents` | `course_id`; optional `file_type` (`all` or `pdf`) | Documents and links throughout nested modules, with download guidance |
+| `download_document` | `course_id`, `source`, source-specific IDs; optional `destination_dir`, `pdf_only` | Local file path, filename, bytes, MIME type, SHA-256 |
 | `get_announcements` | `course_id` | Course announcements, bodies, attachment IDs |
 | `get_announcement` | `course_id`, `announcement_id` | One announcement with attachment metadata |
 | `get_discussion_forums` | `course_id` | Visible discussion forums |
@@ -209,7 +211,7 @@ npm run build  # Compile to dist/
 npm run dev   # Launch from source with externally supplied environment variables
 ```
 
-`src/browser-auth.ts` handles manual login and session-backed API reads; `src/session.ts` stores tenant-bound credentials. `src/setup.ts` implements the terminal wizard and `src/setup-guide.ts` shares instructions with the MCP setup tool. `src/client.ts` contains the reusable Brightspace client; `src/server.ts` maps it to MCP tools; `src/index.ts` starts stdio transport. Tests use synthetic API responses, an in-memory MCP client, and an actual stdio handshake. They do not need student credentials. Live CUNY checks verified document discovery and one DOCX download, announcements, discussion posts, classlist, group membership, calendar, quiz listings/details, and own-submission status. Quiz question retrieval returned the expected permission denial (`403`) for the sampled student context. This does not guarantee access to every resource in every course; instructor permissions and API versions still apply.
+`src/browser-auth.ts` handles manual login and session-backed API reads; `src/session.ts` stores tenant-bound credentials. `src/setup.ts` implements the terminal wizard and `src/setup-guide.ts` shares instructions with the MCP setup tool. `src/client.ts` contains the reusable Brightspace client; `src/server.ts` maps it to MCP tools; `src/index.ts` starts stdio transport. Tests use synthetic API responses, an in-memory MCP client, and an actual stdio handshake. They do not need student credentials. Live CUNY checks verified document discovery and DOCX/PDF downloads, announcements, discussion posts, classlist, group membership, calendar, quiz listings/details, and own-submission status. Quiz question retrieval returned the expected permission denial (`403`) for the sampled student context. This does not guarantee access to every resource in every course; instructor permissions and API versions still apply.
 
 ## Updating an existing agent session
 

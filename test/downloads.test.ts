@@ -141,3 +141,24 @@ test('attachment download sources construct course-specific official routes', as
     assert.deepEqual(paths, ['/d2l/api/le/1.82/1/dropbox/folders/2/attachments/3', '/d2l/api/le/1.82/1/news/4/attachments/5', '/d2l/api/le/1.82/1/discussions/forums/6/topics/7/posts/8/attachments/9']);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test('PDF discovery filters by title or URL while PDF-only downloads validate actual bytes', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'brightspace-pdf-'));
+  const client = new BrightspaceClient(config, async () => json({ Modules: [{ Title: 'Week', Topics: [
+    { TopicId: 1, Title: 'Slides', ActivityType: 1, Url: '/content/enforced/123-course/lecture.PDF?download=1' },
+    { TopicId: 2, Title: 'Assignment.pdf', ActivityType: 1 },
+    { TopicId: 3, Title: 'Document', ActivityType: 1, Url: '/content/enforced/123-course/file.docx' },
+  ] }] }), async () => pdf());
+  try {
+    assert.equal((await client.listCourseDocuments('123', 'pdf')).documents.length, 2);
+    const result = await client.downloadDocument('content_topic', '123', { topic_id: '1' }, dir, true);
+    assert.match(result.path, /\.pdf$/);
+    assert.equal(result.mimeType, 'application/pdf');
+    const before = await readdir(dir);
+    const notPdf = new BrightspaceClient(config, async () => new Response('Word document bytes', { headers: { 'content-type': 'application/pdf' } }));
+    await assert.rejects(notPdf.downloadDocument('content_topic', '123', { topic_id: '3' }, dir, true), /not a PDF/);
+    assert.deepEqual(await readdir(dir), before);
+    const streamed = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(Buffer.from('%P')); controller.enqueue(Buffer.from('DF-1.7 split header')); controller.close(); } });
+    assert.equal((await saveDownload(new Response(streamed), dir, 'lecture', undefined, true)).mimeType, 'application/pdf');
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

@@ -224,7 +224,7 @@ export class BrightspaceClient {
     return this.get(this.path('le', `${id.parse(courseId)}/content/topics/${id.parse(topicId)}`));
   }
 
-  async listCourseDocuments(courseId: string) {
+  async listCourseDocuments(courseId: string, fileType: 'all' | 'pdf' = 'all') {
     const toc = await this.getCourseContent(courseId);
     const root = z.object({ Modules: z.array(z.unknown()) }).safeParse(toc);
     if (!root.success) throw new BrightspaceError('Unexpected course table of contents.');
@@ -244,7 +244,10 @@ export class BrightspaceClient {
               isCourseLink = url.origin === this.config.baseUrl && new RegExp(`^/content/enforced/${id.parse(courseId)}(?:-|/)`).test(url.pathname);
             } catch { /* Invalid link remains non-downloadable. */ }
           }
-          documents.push({ courseId, topicId: String(topic.TopicId), title: topic.Title, modulePath: path, topicType: topic.TopicType ?? null, activityType: topic.ActivityType ?? null,
+          let isPdf = /\.pdf$/i.test(topic.Title);
+          if (topic.Url) { try { isPdf ||= /\.pdf$/i.test(decodeURIComponent(new URL(topic.Url, this.config.baseUrl).pathname)); } catch { /* Keep title inference. */ } }
+          if (fileType === 'pdf' && !isPdf) continue;
+          documents.push({ fileType: isPdf ? 'pdf' : 'unknown', courseId, topicId: String(topic.TopicId), title: topic.Title, modulePath: path, topicType: topic.TopicType ?? null, activityType: topic.ActivityType ?? null,
             url: topic.Url ?? null, downloadable: isFile || isCourseLink, downloadSource: isFile ? 'content_topic' : isCourseLink ? 'course_file' : null,
             nextStep: isFile ? 'download_document with source=content_topic and topic_id' : isCourseLink ? 'download_document with source=course_file and url' : 'get_content_topic to inspect the link; external services may require their own login' });
         }
@@ -253,10 +256,10 @@ export class BrightspaceClient {
     };
     try { visit(root.data.Modules, [], 0); }
     catch (error) { if (error instanceof BrightspaceError) throw error; throw new BrightspaceError('Unexpected course module or topic response.'); }
-    return { documents, note: 'Lists visible file and link topics. Files embedded inside HTML pages may require inspecting that page after download.' };
+    return { documents, note: 'Lists visible file and link topics. PDF filtering uses title/URL extensions and can omit PDFs whose type is not in metadata. Files embedded inside HTML pages may require inspecting that page after download.' };
   }
 
-  async downloadDocument(source: DocumentSource, courseId: string, ids: Record<string, string | undefined>, directory?: string) {
+  async downloadDocument(source: DocumentSource, courseId: string, ids: Record<string, string | undefined>, directory?: string, pdfOnly = false) {
     const course = id.parse(courseId);
     const required = (key: string) => {
       if (!ids[key] || !/^\d+$/.test(ids[key]!)) throw new BrightspaceError(`${source} requires a numeric ${key}.`);
@@ -284,14 +287,14 @@ export class BrightspaceClient {
             !new RegExp(`^/content/enforced/${course}(?:-|/)`).test(url.pathname) || /%2f|%5c|%2e/i.test(url.pathname)) {
           throw new BrightspaceError('Only direct /content/enforced/ files belonging to this course on the configured Brightspace host can be downloaded by URL. Use a topic or attachment ID otherwise.');
         }
-        return this.downloadUrl(url, course, directory);
+        return this.downloadUrl(url, course, directory, pdfOnly);
       }
       default: throw new BrightspaceError('Unsupported document source.');
     }
-    return this.downloadUrl(new URL(this.path('le', suffix), this.config.baseUrl), course, directory);
+    return this.downloadUrl(new URL(this.path('le', suffix), this.config.baseUrl), course, directory, pdfOnly);
   }
 
-  private async downloadUrl(url: URL, courseId: string, directory?: string) {
+  private async downloadUrl(url: URL, courseId: string, directory?: string, pdfOnly = false) {
     let response: Response;
     try {
       response = await this.fileFetcher(url, { method: 'GET', redirect: 'error', signal: AbortSignal.timeout(60_000),
@@ -323,7 +326,7 @@ export class BrightspaceClient {
         }), { status: response.status, headers: response.headers });
       }
     }
-    return saveDownload(response, directory ?? join(homedir(), 'Downloads', 'brightspace-mcp', courseId), `document-${courseId}.bin`);
+    return saveDownload(response, directory ?? join(homedir(), 'Downloads', 'brightspace-mcp', courseId), `document-${courseId}.${contentType.includes('application/pdf') || pdfOnly ? 'pdf' : 'bin'}`, undefined, pdfOnly);
   }
 
   async getUpcomingDeadlines(courseIds: string[], days = 14, now = new Date()) {
