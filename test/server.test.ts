@@ -22,7 +22,7 @@ test('MCP handshake, tool discovery, tool calls, validation, and error responses
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 6);
+    assert.equal(tools.length, 7);
     assert.ok(tools.every(tool => tool.annotations?.readOnlyHint));
     const result = await client.callTool({ name: 'get_grades', arguments: { course_id: '123' } });
     assert.equal(result.isError, true);
@@ -43,6 +43,26 @@ test('actual stdio entrypoint initializes without polluting protocol stdout', as
   try {
     await client.connect(transport);
     const result = await client.listTools();
-    assert.equal(result.tools.length, 6);
+    assert.equal(result.tools.length, 7);
+  } finally { await client.close(); }
+});
+
+test('unconfigured stdio server offers setup and actionable errors without needing credentials', async () => {
+  const client = new Client({ name: 'setup-test', version: '1.0.0' });
+  const transport = new StdioClientTransport({
+    command: process.execPath, args: ['--import', 'tsx', 'src/index.ts'],
+    env: { PATH: process.env.PATH ?? '' }, stderr: 'pipe',
+  });
+  try {
+    await client.connect(transport);
+    const tools = await client.listTools();
+    assert.ok(tools.tools.some(tool => tool.name === 'setup'));
+    const setup = await client.callTool({ name: 'setup', arguments: {} });
+    assert.notEqual(setup.isError, true);
+    assert.match(JSON.stringify(setup.content), /npm run setup/);
+    assert.match(JSON.stringify(setup.content), /configured\\": false/);
+    const courses = await client.callTool({ name: 'get_courses', arguments: {} });
+    assert.equal(courses.isError, true);
+    assert.match(JSON.stringify(courses.content), /not configured/);
   } finally { await client.close(); }
 });
