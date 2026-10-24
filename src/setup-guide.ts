@@ -5,11 +5,16 @@ export const setupGuide = {
     'Copy your school’s Brightspace URL from the browser address bar. For CUNY use https://brightspace.cuny.edu. A full Brightspace page URL is accepted; the wizard extracts the origin. Do not use your separate university SSO login host.',
     'Keep the default API versions unless your administrator specifies supported alternatives. No course IDs or OAuth application credentials are needed for browser mode.',
     'The wizard writes a private .env file, then offers to open Chromium. Complete your school sign-in and MFA yourself, navigate to the Brightspace homepage, then confirm in the terminal. Enrollment access is verified before the session is saved.',
-    'Browser sessions are stored privately under ~/.brightspace-mcp/sessions/, bound to the exact Brightspace host. Passwords, MFA secrets, and SSO-provider cookies are not saved. This unofficial session integration may not work at every institution; CUNY live compatibility still requires testing.',
+    'Browser sessions are stored privately under ~/.brightspace-mcp/sessions/, bound to the exact Brightspace host. Passwords, MFA secrets, and SSO-provider cookies are not saved. This unofficial session integration may not work at every institution; Selected CUNY course reads and document downloads have been verified with a student session.',
     'Start the server with node --env-file=.env dist/index.js or configure your MCP client with absolute paths. When prompted to sign in again, run npm run login. Run npm run logout to remove the locally saved session. Sessions are reloaded by tools without restarting the server; changing .env requires a restart.',
     'OAuth access-token mode is still available if your institution provides an approved registered application. Only that mode requires the scopes below and an access_token from an approved Authorization Code flow; the wizard masks the token. Browser login does not require copying a token.',
   ],
-  scopes: ['enrollment:own_enrollment:read', 'dropbox:folders:read', 'grades:own_grades:read', 'content:toc:read'],
+  scopes: [
+    'enrollment:own_enrollment:read', 'dropbox:folders:read', 'grades:own_grades:read', 'content:toc:read',
+    'content:topics:readonly', 'content:file:read', 'news:newsitems:read', 'discussions:forums:readonly',
+    'discussions:topics:readonly', 'discussions:posts:readonly', 'enrollment:orgunit:read', 'groups:group:read',
+    'users:own_profile:read', 'quizzing:quizzes:read', 'calendar:my_events:read',
+  ],
   oauth: {
     documentation: 'https://docs.valence.desire2learn.com/basic/oauth2.html',
     authorizationEndpoint: 'https://auth.brightspace.com/oauth2/auth',

@@ -189,8 +189,14 @@ export class BrightspaceClient {
     return this.get(this.path('le', `${id.parse(courseId)}/quizzes/${id.parse(quizId)}`));
   }
 
-  getQuizQuestions(courseId: string, quizId: string) {
-    return this.getObjectPages(this.path('le', `${id.parse(courseId)}/quizzes/${id.parse(quizId)}/questions/`));
+  async getQuizQuestions(courseId: string, quizId: string) {
+    try { return await this.getObjectPages(this.path('le', `${id.parse(courseId)}/quizzes/${id.parse(quizId)}/questions/`)); }
+    catch (error) {
+      if (error instanceof BrightspaceError && error.message.startsWith('Brightspace HTTP 403:')) {
+        throw new BrightspaceError('Brightspace HTTP 403: Quiz question contents are restricted for this account/API context. The quiz may still be available on the website. No attempt was started.');
+      }
+      throw error;
+    }
   }
 
   getCalendarEvents(courseId: string, startTime?: string, endTime?: string) {

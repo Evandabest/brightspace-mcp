@@ -129,3 +129,15 @@ test('CUNY TOC activity types identify documents without TopicType and detect co
   assert.deepEqual(documents.map(doc => doc.downloadable), [true, true, false]);
   assert.deepEqual(documents.map(doc => doc.downloadSource), ['content_topic', 'course_file', null]);
 });
+
+test('attachment download sources construct course-specific official routes', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'brightspace-attachments-'));
+  const paths: string[] = [];
+  const client = new BrightspaceClient(config, async input => { paths.push(new URL(String(input)).pathname); return pdf(); });
+  try {
+    await client.downloadDocument('assignment_attachment', '1', { assignment_id: '2', file_id: '3' }, dir);
+    await client.downloadDocument('announcement_attachment', '1', { announcement_id: '4', file_id: '5' }, dir);
+    await client.downloadDocument('discussion_attachment', '1', { forum_id: '6', topic_id: '7', post_id: '8', file_id: '9' }, dir);
+    assert.deepEqual(paths, ['/d2l/api/le/1.82/1/dropbox/folders/2/attachments/3', '/d2l/api/le/1.82/1/news/4/attachments/5', '/d2l/api/le/1.82/1/discussions/forums/6/topics/7/posts/8/attachments/9']);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
