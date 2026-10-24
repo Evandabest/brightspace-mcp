@@ -25,15 +25,16 @@ export class BrightspaceClient {
     try {
       response = await this.fetcher(url, {
         method: 'GET', redirect: 'error', signal: AbortSignal.timeout(30_000),
-        headers: { Authorization: `Bearer ${this.config.accessToken}`, Accept: 'application/json' },
+        headers: { ...(this.config.accessToken ? { Authorization: `Bearer ${this.config.accessToken}` } : {}), Accept: 'application/json' },
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof BrightspaceError) throw error;
       throw new BrightspaceError('Brightspace request failed or timed out. Check the host and connection.');
     }
     if (!response.ok) {
       const hints: Record<number, string> = {
         401: 'Access token expired or invalid. Supply a new OAuth access token and restart.',
-        403: 'Your account or OAuth scopes do not allow this operation.',
+        403: 'Your account or OAuth scopes do not allow this operation. With browser login, try npm run login; this tenant may restrict session-based API access.',
         404: 'Resource not found. Check IDs and configured API versions.',
         429: 'Brightspace rate limit reached. Try again later.',
       };
