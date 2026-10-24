@@ -1,0 +1,33 @@
+{
+  "name": "brightspace-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Read-only Brightspace tools for student AI assistants",
+  "type": "module",
+  "bin": {
+    "brightspace-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test": "tsx --test test/*.test.ts",
+    "check": "tsc --noEmit && npm test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
