@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { BrightspaceClient, BrightspaceError } from './client.js';
 import { setupGuide } from './setup-guide.js';
 
+const numericId = z.string().regex(/^\d+$/);
 const courseId = z.string().regex(/^\d+$/).describe('Brightspace course org unit ID from get_courses');
 const annotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
 
@@ -42,6 +43,58 @@ export function createServer(client?: BrightspaceClient) {
     description: 'Read the visible course table of contents: modules, topics, and material links. Use list_course_documents and download_document to save file contents locally.',
     inputSchema: { course_id: courseId }, annotations,
   }, ({ course_id }) => run(client => client.getCourseContent(course_id)));
+  server.registerTool('get_announcements', {
+    description: 'Read visible course announcements, including bodies and attachment IDs for download_document.',
+    inputSchema: { course_id: courseId }, annotations,
+  }, ({ course_id }) => run(client => client.getAnnouncements(course_id)));
+  server.registerTool('get_announcement', {
+    description: 'Read one announcement and its attachments. Use download_document with source=announcement_attachment to save a file.',
+    inputSchema: { course_id: courseId, announcement_id: numericId }, annotations,
+  }, ({ course_id, announcement_id }) => run(client => client.getAnnouncement(course_id, announcement_id)));
+  server.registerTool('get_discussion_forums', {
+    description: 'List course discussion forums visible to the student.',
+    inputSchema: { course_id: courseId }, annotations,
+  }, ({ course_id }) => run(client => client.getDiscussionForums(course_id)));
+  server.registerTool('get_discussion_topics', {
+    description: 'List discussion topics and instructions in a visible forum.',
+    inputSchema: { course_id: courseId, forum_id: numericId }, annotations,
+  }, ({ course_id, forum_id }) => run(client => client.getDiscussionTopics(course_id, forum_id)));
+  server.registerTool('get_discussion_posts', {
+    description: 'Read one page of visible discussion posts and replies, with bodies and attachment metadata. Follow nextPage for additional posts. Does not post, mark read or change subscriptions.',
+    inputSchema: { course_id: courseId, forum_id: numericId, topic_id: numericId, page_number: z.number().int().min(1).max(10000).default(1), page_size: z.number().int().min(1).max(1000).default(100), thread_id: numericId.optional() }, annotations,
+  }, ({ course_id, forum_id, topic_id, page_number, page_size, thread_id }) => run(client => client.getDiscussionPosts(course_id, forum_id, topic_id, page_number, page_size, thread_id)));
+  server.registerTool('get_discussion_post', {
+    description: 'Read one visible discussion post, including full message and attachment metadata for download_document.',
+    inputSchema: { course_id: courseId, forum_id: numericId, topic_id: numericId, post_id: numericId }, annotations,
+  }, ({ course_id, forum_id, topic_id, post_id }) => run(client => client.getDiscussionPost(course_id, forum_id, topic_id, post_id)));
+  server.registerTool('get_classlist', {
+    description: 'Read the course classlist with all pages. Only fields permitted by institutional privacy settings are returned; some courses deny student access.',
+    inputSchema: { course_id: courseId }, annotations,
+  }, ({ course_id }) => run(client => client.getClasslist(course_id)));
+  server.registerTool('get_group_membership', {
+    description: 'Read groups the current student belongs to. Includes visible member IDs on older API versions. Reports category permission errors explicitly instead of claiming no memberships.',
+    inputSchema: { course_id: courseId }, annotations,
+  }, ({ course_id }) => run(client => client.getGroupMembership(course_id)));
+  server.registerTool('get_quizzes', {
+    description: 'List quizzes the API permits the student to see, following all pages. Does not start any attempt. An empty list can reflect institutional visibility restrictions.',
+    inputSchema: { course_id: courseId }, annotations,
+  }, ({ course_id }) => run(client => client.getQuizzes(course_id)));
+  server.registerTool('get_quiz_details', {
+    description: 'Read visible quiz instructions, description, availability, and configuration. Does not start an attempt or submit answers.',
+    inputSchema: { course_id: courseId, quiz_id: numericId }, annotations,
+  }, ({ course_id, quiz_id }) => run(client => client.getQuizDetails(course_id, quiz_id)));
+  server.registerTool('get_quiz_questions', {
+    description: 'Read quiz question contents only if Brightspace grants API access, following all pages. Student roles may receive 403 even when the quiz is available on the website. Does not start attempts or bypass visibility, timing, or release restrictions.',
+    inputSchema: { course_id: courseId, quiz_id: numericId }, annotations,
+  }, ({ course_id, quiz_id }) => run(client => client.getQuizQuestions(course_id, quiz_id)));
+  server.registerTool('get_calendar_events', {
+    description: 'Read the student’s course calendar events in a time window, following all pages. Defaults to now through 14 days ahead. Maximum window 366 days.',
+    inputSchema: { course_id: courseId, start_time: z.string().datetime({ offset: true }).optional(), end_time: z.string().datetime({ offset: true }).optional() }, annotations,
+  }, ({ course_id, start_time, end_time }) => run(client => client.getCalendarEvents(course_id, start_time, end_time)));
+  server.registerTool('get_submission_status', {
+    description: 'Read your own assignment submission history, file IDs, completion date and released feedback. Use submission_file downloads for your own submitted documents. Online submission status does not determine completion of on-paper work.',
+    inputSchema: { course_id: courseId, assignment_id: numericId }, annotations,
+  }, ({ course_id, assignment_id }) => run(client => client.getSubmissionStatus(course_id, assignment_id)));
   server.registerTool('get_content_topic', {
     description: 'Read a content topic’s metadata, description and URL. Use list_course_documents to find file topics; download_document saves their contents.',
     inputSchema: { course_id: courseId, topic_id: z.string().regex(/^\d+$/) }, annotations,
