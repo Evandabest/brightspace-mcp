@@ -2,6 +2,60 @@
 
 A local, read-only MCP server that lets AI assistants access a student's Brightspace courses, assignments, documents, announcements, discussions, classlists, groups, quizzes, calendar events, released grades, and own submission history. Built with TypeScript and the official MCP SDK; uses the Brightspace Valence REST APIs.
 
+## Install with your coding agent
+
+Copy and paste this prompt into a local coding agent that supports MCP, such as Codex. It tells the agent to install this repository and register Brightspace as a tool provider:
+
+```text
+Install https://github.com/Evandabest/brightspace-mcp.git on my computer
+and add it to this coding agent as a local MCP server named "brightspace".
+
+1. Check that Node.js 22.13+ and npm are available. Reuse my existing
+   brightspace-mcp checkout if present; otherwise clone the repository into
+   ~/projects/brightspace-mcp (or an appropriate local projects directory).
+   If updating an existing clean checkout, use git pull --ff-only. Preserve
+   local changes, .env, and saved sessions; report any update conflict.
+2. In that directory run npm ci, npm run build, and npm run browser:install.
+3. Register the server using this agent's supported MCP configuration.
+   Launch the Node executable with these arguments, using actual absolute
+   paths for this computer:
+     --env-file-if-exists=/absolute/path/to/brightspace-mcp/.env
+     /absolute/path/to/brightspace-mcp/dist/index.js
+   Preserve other MCP servers. If "brightspace" is already registered,
+   check its launch paths and update that entry rather than adding a duplicate.
+   Run the Node entrypoint directly, not npm start: stdout carries MCP messages.
+4. If setup is needed, tell me to run npm run setup in my own terminal from
+   the checkout and choose Browser login. For CUNY the Brightspace URL is
+   https://brightspace.cuny.edu; for another school ask me for its Brightspace
+   URL. I will complete school sign-in and MFA in the browser and confirm
+   in the terminal. Never ask me to paste passwords, cookies, tokens, or MFA
+   codes into chat. Preserve a working configuration instead of rerunning setup.
+5. Verify registration and explain how to restart the MCP connection or
+   open a new agent session to load it. Once connected and signed in, call
+   get_courses to verify access. If login expired, direct me to npm run login.
+   Do not report successful account access until that tool call succeeds.
+
+After installation, I want to ask about assignments and download course PDFs
+into my current workspace using the Brightspace tools.
+```
+
+The agent can install and register the server; **you complete sign-in yourself**. The `--env-file-if-exists` option lets the MCP `setup` tool provide guidance before `.env` exists. After creating or changing `.env`, restart the MCP connection so it loads those settings. Each student uses their own account and locally saved session.
+
+For Codex, the agent can register the server with the following command, replacing both paths with the actual checkout location:
+
+```sh
+codex mcp add brightspace -- node \
+  --env-file-if-exists=/absolute/path/to/brightspace-mcp/.env \
+  /absolute/path/to/brightspace-mcp/dist/index.js
+codex mcp list
+```
+
+This uses Codex's local stdio MCP support; see the [official OpenAI documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli). If `node` is unavailable in the agent application's environment, use the absolute path to the Node executable. For agents with JSON configuration, use the [MCP client configuration below](#connect-an-mcp-client).
+
+After restarting the connection or starting a new agent session, try:
+
+> Use the Brightspace MCP to list my courses, show upcoming homework, and find the PDF lecture notes for a course. Download the PDFs into this workspace.
+
 ## Requirements
 
 - Node.js 22.13 or newer and npm.
