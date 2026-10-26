@@ -20,11 +20,12 @@
     "start": "node dist/index.js",
     "test": "node --import tsx --test test/*.test.ts",
     "check": "tsc --noEmit && npm test",
-    "setup": "npm run build && node dist/index.js setup",
+    "setup": "npm run build && node --env-file-if-exists=.env dist/index.js setup",
     "login": "npm run build && node --env-file-if-exists=.env dist/index.js login",
     "logout": "npm run build && node --env-file-if-exists=.env dist/index.js logout",
     "browser:install": "playwright install chromium",
-    "test:browser": "node --import tsx --test test/browser.integration.ts"
+    "test:browser": "node --import tsx --test test/browser.integration.ts",
+    "unlock": "npm run build && node --env-file-if-exists=.env dist/index.js unlock"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.7.4",

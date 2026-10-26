@@ -3,9 +3,14 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { loadConfig } from './config.js';
 import { BrightspaceClient } from './client.js';
 import { createServer } from './server.js';
+import { consumeSessionPassphrase } from './session.js';
 
 try {
-  if (process.argv[2] === 'setup') {
+  consumeSessionPassphrase();
+  if (process.argv[2] === 'unlock') {
+    const { runUnlock } = await import('./unlock.js');
+    await runUnlock(process.argv.slice(3));
+  } else if (process.argv[2] === 'setup') {
     const { runSetup } = await import('./setup.js');
     await runSetup();
   } else if (['login', 'logout'].includes(process.argv[2])) {

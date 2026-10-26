@@ -10,8 +10,9 @@ const schema = z.object({
   BRIGHTSPACE_ACCESS_TOKEN: z.string().trim().min(1).refine(v => !/[\r\n]/.test(v)).optional(),
   BRIGHTSPACE_LP_VERSION: z.string().regex(/^\d+\.\d+$/).default('1.49'),
   BRIGHTSPACE_LE_VERSION: z.string().regex(/^\d+\.\d+$/).default('1.82'),
-  // Explicit opt-out of session encryption at rest, for machines without an OS keychain.
-  BRIGHTSPACE_INSECURE_PLAINTEXT_SESSION: z.enum(['0', '1']).default('0'),
+  BRIGHTSPACE_SESSION_STORAGE: z.enum(['keychain', 'passphrase']).default('keychain'),
+  // Reject the obsolete plaintext opt-out rather than silently weakening storage.
+  BRIGHTSPACE_INSECURE_PLAINTEXT_SESSION: z.literal('0').optional(),
 });
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
@@ -26,7 +27,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     authMode: result.data.BRIGHTSPACE_AUTH_MODE,
     lpVersion: result.data.BRIGHTSPACE_LP_VERSION,
     leVersion: result.data.BRIGHTSPACE_LE_VERSION,
-    insecurePlaintextSession: result.data.BRIGHTSPACE_INSECURE_PLAINTEXT_SESSION === '1',
+    sessionStorage: result.data.BRIGHTSPACE_SESSION_STORAGE,
   };
 }
 export type Config = ReturnType<typeof loadConfig>;

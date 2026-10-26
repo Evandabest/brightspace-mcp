@@ -108,31 +108,22 @@ test('a session file copied to another host is rejected even with the same key',
 test('an unavailable keychain fails closed without writing plaintext', () => withDirectory(async directory => {
   const path = join(directory, 'session.json');
   await assert.rejects(saveSession(session, path, { keyring: unavailableKeyring }), (error: Error) =>
-    /keychain is unavailable/.test(error.message) && /npm run login/.test(error.message) && !error.message.includes('no secret service'));
+    /keychain is unavailable/.test(error.message) && /npm run setup/.test(error.message) && !error.message.includes('no secret service'));
   await assert.rejects(stat(path), { code: 'ENOENT' });
   await saveSession(session, path, { keyring: fakeKeyring() });
-  await assert.rejects(readSession(config, path, unavailableKeyring), /keychain is unavailable.*npm run login/);
+  await assert.rejects(readSession(config, path, unavailableKeyring), /keychain is unavailable.*npm run setup/);
   await assert.rejects(deleteSession(config, path, unavailableKeyring), /keychain/);
   await assert.rejects(stat(path), { code: 'ENOENT' });
 }));
 
-test('plaintext storage requires the explicit, validated opt-in', () => withDirectory(async directory => {
-  const insecure = loadConfig({ BRIGHTSPACE_BASE_URL: config.baseUrl, BRIGHTSPACE_AUTH_MODE: 'browser', BRIGHTSPACE_INSECURE_PLAINTEXT_SESSION: '1' });
-  assert.equal(config.insecurePlaintextSession, false);
-  assert.equal(insecure.insecurePlaintextSession, true);
-  for (const value of ['true', 'yes', '']) {
-    assert.throws(() => loadConfig({ BRIGHTSPACE_BASE_URL: config.baseUrl, BRIGHTSPACE_AUTH_MODE: 'browser', BRIGHTSPACE_INSECURE_PLAINTEXT_SESSION: value }),
-      /BRIGHTSPACE_INSECURE_PLAINTEXT_SESSION/);
+test('plaintext opt-out is rejected and passphrase storage survives setup serialization', () => {
+  for (const value of ['1', 'true', 'yes', '']) {
+    assert.throws(() => loadConfig({ BRIGHTSPACE_BASE_URL: config.baseUrl, BRIGHTSPACE_AUTH_MODE: 'browser', BRIGHTSPACE_INSECURE_PLAINTEXT_SESSION: value }), /BRIGHTSPACE_INSECURE_PLAINTEXT_SESSION/);
   }
-  const path = join(directory, 'session.json');
-  await saveSession(session, path, { keyring: unavailableKeyring, plaintext: true });
-  assert.equal((await stat(path)).mode & 0o777, 0o600);
-  assert.deepEqual(JSON.parse(await readFile(path, 'utf8')), session);
-  assert.deepEqual(await readSession(insecure, path, unavailableKeyring), session);
-  assert.deepEqual(JSON.parse(await readFile(path, 'utf8')), session);
-  await deleteSession(insecure, path, unavailableKeyring);
-  await assert.rejects(stat(path), { code: 'ENOENT' });
-}));
+  const fallback = loadConfig({ BRIGHTSPACE_BASE_URL: config.baseUrl, BRIGHTSPACE_AUTH_MODE: 'browser', BRIGHTSPACE_SESSION_STORAGE: 'passphrase' });
+  assert.equal(config.sessionStorage, 'keychain');
+  assert.deepEqual(loadConfig(parseEnv(serializeConfig(fallback))), fallback);
+});
 
 test('legacy plaintext sessions are migrated to encrypted storage on first read', () => withDirectory(async directory => {
   const path = join(directory, 'private', 'session.json');

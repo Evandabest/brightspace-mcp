@@ -61,6 +61,10 @@ async function mintToken(context: APIRequestContext, config: Config, csrfToken: 
 export async function runLogin(config: Config) {
   if (config.authMode !== 'browser') throw new Error('Login is for browser authentication. Run npm run setup and choose browser login.');
   if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error('Run npm run login in your own interactive terminal.');
+  if (config.sessionStorage === 'passphrase') {
+    const { promptSessionPassphrase } = await import('./unlock.js');
+    await promptSessionPassphrase(true);
+  }
   let browser: Browser;
   try { browser = await chromium.launch({ headless: false }); }
   catch { throw new Error('Could not open Chromium. Run npm run browser:install, then npm run login.'); }
@@ -73,7 +77,7 @@ export async function runLogin(config: Config) {
     const session = await captureSession(context, config);
     // Validate actual enrollment access before replacing a previously working session.
     const courses = await new BrightspaceClient(config, sessionFetch(config, async () => session)).getCourses();
-    await saveSession(session, undefined, { plaintext: config.insecurePlaintextSession });
+    await saveSession(session, undefined, { storage: config.sessionStorage });
     console.log(`Signed in. Enrollment access verified (${courses.length} courses). Session saved privately on this computer. You can now use the MCP tools.`);
   } finally { await browser.close(); }
 }

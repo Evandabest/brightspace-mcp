@@ -22,6 +22,7 @@ export function serializeConfig(config: Config): string {
     BRIGHTSPACE_ACCESS_TOKEN: config.accessToken,
     BRIGHTSPACE_LP_VERSION: config.lpVersion,
     BRIGHTSPACE_LE_VERSION: config.leVersion,
+    BRIGHTSPACE_SESSION_STORAGE: config.sessionStorage,
   }).filter(([, value]) => value !== undefined).map(([key, value]) => `${key}=${JSON.stringify(value)}`).join('\n') + '\n';
 }
 
@@ -60,11 +61,15 @@ export async function runSetup() {
   } });
   const token = mode === 'oauth' ? await password({ message: 'Your OAuth access token (hidden):', mask: '*', validate: value =>
     value.trim() && !/[\r\n'"`\\]/.test(value) ? true : 'Paste only the single-line access_token value.' }) : undefined;
+  const storage = mode === 'browser' ? await select({ message: 'Protect the saved session with:', default: process.env.BRIGHTSPACE_SESSION_STORAGE === 'passphrase' ? 'passphrase' : 'keychain', choices: [
+    { name: 'OS keychain (recommended)', value: 'keychain' },
+    { name: 'Passphrase (enter when launching your agent; never saved)', value: 'passphrase' },
+  ] }) : 'keychain';
   const version = (value: string) => /^\d+\.\d+$/.test(value) || 'Use a version such as 1.49.';
   const lp = await input({ message: 'LP API version:', default: '1.49', validate: version });
   const le = await input({ message: 'LE API version:', default: '1.82', validate: version });
   const config = loadConfig({ BRIGHTSPACE_BASE_URL: normalizeHost(host), BRIGHTSPACE_ACCESS_TOKEN: token, BRIGHTSPACE_AUTH_MODE: mode,
-    BRIGHTSPACE_LP_VERSION: lp, BRIGHTSPACE_LE_VERSION: le });
+    BRIGHTSPACE_LP_VERSION: lp, BRIGHTSPACE_LE_VERSION: le, BRIGHTSPACE_SESSION_STORAGE: storage });
   if (mode === 'oauth' && await confirm({ message: `Check enrollment access at ${config.baseUrl}?`, default: true })) {
     try {
       const courses = await new BrightspaceClient(config).getCourses();
