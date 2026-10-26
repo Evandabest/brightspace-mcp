@@ -2,7 +2,7 @@ import { request, chromium, type APIRequestContext, type Browser, type BrowserCo
 import { confirm } from '@inquirer/prompts';
 import type { Config } from './config.js';
 import { BrightspaceClient, BrightspaceError } from './client.js';
-import { readSession, saveSession, type Session } from './session.js';
+import { readSession, saveSession, SessionError, type Session } from './session.js';
 
 /** Adapter for the shared GET-only client. Only token renewal uses POST. */
 export function sessionFetch(
@@ -16,7 +16,7 @@ export function sessionFetch(
     }
     let session: Session;
     try { session = await load(); }
-    catch { throw new BrightspaceError('No saved browser session. Run npm run login in your terminal.'); }
+    catch (error) { throw new BrightspaceError(error instanceof SessionError ? error.message : 'No saved browser session. Run npm run login in your terminal.'); }
     const context = await createContext({ storageState: { cookies: session.cookies, origins: [] } });
     try {
       const headers: Record<string, string> = { Accept: 'application/json' };
@@ -73,7 +73,7 @@ export async function runLogin(config: Config) {
     const session = await captureSession(context, config);
     // Validate actual enrollment access before replacing a previously working session.
     const courses = await new BrightspaceClient(config, sessionFetch(config, async () => session)).getCourses();
-    await saveSession(session);
+    await saveSession(session, undefined, { plaintext: config.insecurePlaintextSession });
     console.log(`Signed in. Enrollment access verified (${courses.length} courses). Session saved privately on this computer. You can now use the MCP tools.`);
   } finally { await browser.close(); }
 }
@@ -111,7 +111,8 @@ export function sessionDownloadFetch(
       throw new BrightspaceError('Download requests must be GETs to this Brightspace tenant.');
     }
     let session: Session;
-    try { session = await load(); } catch { throw new BrightspaceError('Run npm run login before downloading course files.'); }
+    try { session = await load(); }
+    catch (error) { throw new BrightspaceError(error instanceof SessionError ? error.message : 'Run npm run login before downloading course files.'); }
     const cookies = session.cookies.filter(cookie => cookie.domain.replace(/^\./, '') === url.hostname &&
       (cookie.expires < 0 || cookie.expires > Date.now() / 1000) &&
       (url.pathname === cookie.path || url.pathname.startsWith(cookie.path.endsWith('/') ? cookie.path : `${cookie.path}/`)));

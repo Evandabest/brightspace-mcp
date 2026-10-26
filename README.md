@@ -92,13 +92,19 @@ The wizard offers to open a dedicated Chromium window. Complete your normal univ
 
 Browser mode needs no manually supplied OAuth token, Client ID, or Client Secret. It reuses cookies for the exact Brightspace host. For tenants requiring a web-frontend bearer token, it uses the session-authenticated internal `/d2l/lp/auth/oauth2/token` endpoint with the frontend's CSRF token and retries the read once. That internal endpoint is unofficial and institution dependent. Its token uses the frontend's wildcard scope and inherits the student's permissions; read-only behavior is enforced by the MCP implementation, not by an independently restricted credential.
 
-Sessions are stored under `~/.brightspace-mcp/sessions/`, in a separate host-bound file, with owner-only permissions (`0600` files, `0700` newly created directories on POSIX systems). These files contain credentials, are **not encrypted at rest**, and should remain private. On Windows, access also depends on your user directory's ACLs. Passwords, MFA secrets, browser local storage, and cookies for separate SSO-provider domains are not saved.
+Sessions are stored under `~/.brightspace-mcp/sessions/`, in a separate host-bound file, with owner-only permissions (`0600` files, `0700` newly created directories on POSIX systems). On Windows, access also depends on your user directory's ACLs. Passwords, MFA secrets, browser local storage, and cookies for separate SSO-provider domains are not saved.
+
+Session files are **encrypted at rest** with AES-256-GCM. Each Brightspace host gets its own random 256-bit key, stored in the OS keychain (macOS Keychain, Windows Credential Manager, or the Linux Secret Service) under the service `brightspace-mcp`, never on disk. The host URL is authenticated with the ciphertext, so a session file cannot be reused for a different host. A session saved by an older version in plaintext is encrypted the first time it is read.
+
+This protects the saved session against copies of your disk, backups, synced folders, and other users on the same computer. It does **not** protect against malware or other programs (including AI agents) running as your user account: the server must decrypt the session to use it, and such programs can generally ask the keychain for the same key. Keep treating the session as a credential.
+
+If the keychain is unavailable (for example headless Linux without a Secret Service), the key is missing, or the file has been modified, the server refuses to use or save the session and asks you to run `npm run login`; it never silently falls back to plaintext. On computers without a keychain you can explicitly opt in to the previous unencrypted storage by setting `BRIGHTSPACE_INSECURE_PLAINTEXT_SESSION=1` in `.env`. Sessions saved this way are protected only by file permissions.
 
 To renew an expired session or remove the saved local session:
 
 ```sh
 npm run login   # Loads .env and opens the browser for normal sign-in
-npm run logout  # Removes this host's locally saved browser session
+npm run logout  # Removes this host's saved browser session and its keychain key
 ```
 
 Tools reload saved session credentials on each request, so a successful `login` or `logout` takes effect without restarting the MCP server. A new login can switch which student account this host's tools access. Local logout does not revoke sessions on other devices or clear your regular browser's login. The integration does not bypass MFA or extend university session limits.
