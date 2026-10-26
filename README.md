@@ -28,8 +28,9 @@ and add it to this coding agent as a local MCP server named "brightspace".
    the checkout and choose Browser login. For CUNY the Brightspace URL is
    https://brightspace.cuny.edu; for another school ask me for its Brightspace
    URL. I will complete school sign-in and MFA in the browser and confirm
-   in the terminal. Never ask me to paste passwords, cookies, tokens, or MFA
-   codes into chat. Preserve a working configuration instead of rerunning setup.
+   in the terminal. Never ask me to paste passwords, cookies, tokens, passphrases, or MFA
+   codes into chat. If I choose passphrase storage, follow this README’s
+   passphrase launch/forwarding instructions without saving the secret. Preserve a working configuration instead of rerunning setup.
 5. Verify registration and explain how to restart the MCP connection or
    open a new agent session to load it. Once connected and signed in, call
    get_courses to verify access. If login expired, direct me to npm run login.
@@ -94,17 +95,40 @@ Browser mode needs no manually supplied OAuth token, Client ID, or Client Secret
 
 Sessions are stored under `~/.brightspace-mcp/sessions/`, in a separate host-bound file, with owner-only permissions (`0600` files, `0700` newly created directories on POSIX systems). On Windows, access also depends on your user directory's ACLs. Passwords, MFA secrets, browser local storage, and cookies for separate SSO-provider domains are not saved.
 
-Session files are **encrypted at rest** with AES-256-GCM. Each Brightspace host gets its own random 256-bit key, stored in the OS keychain (macOS Keychain, Windows Credential Manager, or the Linux Secret Service) under the service `brightspace-mcp`, never on disk. The host URL is authenticated with the ciphertext, so a session file cannot be reused for a different host. A session saved by an older version in plaintext is encrypted the first time it is read.
+Session files are **encrypted at rest** with AES-256-GCM. By default (`BRIGHTSPACE_SESSION_STORAGE=keychain`), each Brightspace host gets a random 256-bit key stored in the OS keychain (macOS Keychain, Windows Credential Manager, or Linux Secret Service) under the service `brightspace-mcp`. Linux explicitly requires Secret Service rather than falling back to a volatile kernel keyring. The host URL is authenticated with the ciphertext. Existing version-1 keychain-encrypted files remain compatible; legacy plaintext sessions are encrypted on their next read.
 
-This protects the saved session against copies of your disk, backups, synced folders, and other users on the same computer. It does **not** protect against malware or other programs (including AI agents) running as your user account: the server must decrypt the session to use it, and such programs can generally ask the keychain for the same key. Keep treating the session as a credential.
+If the keychain is unavailable, missing a key, or unable to authenticate the ciphertext, the server refuses to use or save the session. **There is no plaintext fallback.** The obsolete `BRIGHTSPACE_INSECURE_PLAINTEXT_SESSION=1` setting is rejected. Use the passphrase option below on machines without a keychain. Registered OAuth access tokens supplied through `.env` remain outside browser-session encryption; this change protects saved browser cookies and CSRF tokens.
 
-If the keychain is unavailable (for example headless Linux without a Secret Service), the key is missing, or the file has been modified, the server refuses to use or save the session and asks you to run `npm run login`; it never silently falls back to plaintext. On computers without a keychain you can explicitly opt in to the previous unencrypted storage by setting `BRIGHTSPACE_INSECURE_PLAINTEXT_SESSION=1` in `.env`. Sessions saved this way are protected only by file permissions.
+This protects a copied session file without its key or passphrase. It does **not** protect against programs running as your user account: such programs may access the keychain, inspect process memory/environment, or read documents returned to your agent. Keep treating the session as a credential. A forgotten passphrase or lost key requires a new Brightspace login.
+
+### Passphrase fallback without a keychain
+
+1. Run `npm run setup` and choose **Passphrase** for saved-session protection. Setup saves only `BRIGHTSPACE_SESSION_STORAGE=passphrase`, not your passphrase. It loads an existing `.env` so the current choice remains the default. To switch an existing configuration manually, change that setting and run `npm run login`.
+2. During login, choose and confirm a strong passphrase in the masked terminal prompts, then complete your school login and MFA in the browser. A multiword random passphrase is preferable. The session file contains ciphertext and a random salt; the encryption key is derived with scrypt (`N=131072`, `r=8`, `p=1`) and is never saved.
+3. Tell your MCP client to forward the runtime environment variable `BRIGHTSPACE_SESSION_PASSPHRASE` to this server. Do **not** place its value in `.env`, the MCP configuration file, command-line arguments, shell history, or chat. For Codex, add the following line to the existing `[mcp_servers.brightspace]` entry in `~/.codex/config.toml` (preserve other options):
+
+   ```toml
+   env_vars = ["BRIGHTSPACE_SESSION_PASSPHRASE"]
+   ```
+
+4. Start the coding agent through the terminal wrapper, which asks for the passphrase each time:
+
+   ```sh
+   cd /absolute/path/to/brightspace-mcp
+   npm run unlock -- codex
+   ```
+
+   Arguments after the command are forwarded directly. For example, `npm run unlock -- codex /path/to/coursework` starts Codex for another workspace. The wrapper launches the command without a shell, forwards terminal input/output, and preserves its exit status. It does not register the MCP automatically; use the normal registration instructions first.
+
+The passphrase is held in the launched agent's runtime environment so it can start MCP subprocesses. The MCP consumes it into memory and removes it from its own `process.env`, reducing further inheritance. It is not saved by this project, but programs running as the same user may still inspect it. Noninteractive MCP processes never open a password prompt on protocol stdin. If no passphrase is forwarded, tools report that the session is locked. Fully restart the agent using the wrapper to unlock it. GUI clients that cannot forward a one-run secret should use the OS keychain mode instead.
+
+Reads, migrations, saves, and logout use an exclusive filesystem lock so independent MCP processes cannot create conflicting first-time keys or overwrite a migration concurrently. Lock acquisition times out after 10 seconds without stealing an active lock. If a crashed process leaves a stale `<host-hash>.json.lock` directory in `~/.brightspace-mcp/sessions/`, stop other Brightspace MCP processes before removing only that lock directory, then retry. A failed migration leaves the old file untouched.
 
 To renew an expired session or remove the saved local session:
 
 ```sh
 npm run login   # Loads .env and opens the browser for normal sign-in
-npm run logout  # Removes this host's saved browser session and its keychain key
+npm run logout  # Removes the saved session; keychain mode also removes its key
 ```
 
 Tools reload saved session credentials on each request, so a successful `login` or `logout` takes effect without restarting the MCP server. A new login can switch which student account this host's tools access. Local logout does not revoke sessions on other devices or clear your regular browser's login. The integration does not bypass MFA or extend university session limits.
@@ -234,6 +258,7 @@ Deadline lookup accepts up to 50 courses. It includes assignments due between th
 | --- | --- | --- |
 | `BRIGHTSPACE_BASE_URL` | HTTPS origin, without path or query | Required |
 | `BRIGHTSPACE_AUTH_MODE` | `browser` or `oauth` | `oauth` for backward compatibility; wizard recommends `browser` |
+| `BRIGHTSPACE_SESSION_STORAGE` | `keychain` or `passphrase` browser-session protection | `keychain` |
 | `BRIGHTSPACE_ACCESS_TOKEN` | OAuth bearer access token | Required only in OAuth mode |
 | `BRIGHTSPACE_LP_VERSION` | Learning Platform API version | `1.49` |
 | `BRIGHTSPACE_LE_VERSION` | Learning Environment API version | `1.82` |
@@ -265,13 +290,14 @@ PDF/text extraction, full-text search, submission writes, quiz attempts, externa
 npm run setup  # Interactive local configuration wizard
 npm run login  # Renew browser session using .env
 npm run logout # Remove saved browser session
+npm run unlock -- codex # Launch a terminal agent with a passphrase unlocked for this run
 npm run check  # Type-check and run tests
 npm run test:browser # Chromium tests with synthetic login pages
 npm run build  # Compile to dist/
 npm run dev   # Launch from source with externally supplied environment variables
 ```
 
-`src/browser-auth.ts` handles manual login and session-backed API reads; `src/session.ts` stores tenant-bound credentials. `src/setup.ts` implements the terminal wizard and `src/setup-guide.ts` shares instructions with the MCP setup tool. `src/client.ts` contains the reusable Brightspace client; `src/server.ts` maps it to MCP tools; `src/index.ts` starts stdio transport. Tests use synthetic API responses, an in-memory MCP client, and an actual stdio handshake. They do not need student credentials. Live CUNY checks verified document discovery and DOCX/PDF downloads, announcements, discussion posts, classlist, group membership, calendar, quiz listings/details, and own-submission status. Quiz question retrieval returned the expected permission denial (`403`) for the sampled student context. This does not guarantee access to every resource in every course; instructor permissions and API versions still apply.
+`src/browser-auth.ts` handles manual login and session-backed API reads; `src/session.ts` stores encrypted tenant-bound credentials; `src/session-lock.ts` coordinates processes; `src/unlock.ts` implements the terminal passphrase wrapper. `src/setup.ts` implements the terminal wizard and `src/setup-guide.ts` shares instructions with the MCP setup tool. `src/client.ts` contains the reusable Brightspace client; `src/server.ts` maps it to MCP tools; `src/index.ts` starts stdio transport. Tests use synthetic API responses, an in-memory MCP client, and an actual stdio handshake. They do not need student credentials. Live CUNY checks verified document discovery and DOCX/PDF downloads, announcements, discussion posts, classlist, group membership, calendar, quiz listings/details, and own-submission status. Quiz question retrieval returned the expected permission denial (`403`) for the sampled student context. This does not guarantee access to every resource in every course; instructor permissions and API versions still apply.
 
 ## Updating an existing agent session
 
