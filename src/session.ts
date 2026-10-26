@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { Config } from './config.js';
+import { withSessionLock } from './session-lock.js';
 
 const cookie = z.object({ name: z.string(), value: z.string(), domain: z.string(), path: z.string(),
   expires: z.number(), httpOnly: z.boolean(), secure: z.boolean(), sameSite: z.enum(['Strict', 'Lax', 'None']) });
@@ -81,7 +82,10 @@ async function decrypt(envelope: z.infer<typeof envelopeSchema>, baseUrl: string
   } catch { throw new SessionError(undecryptable); }
 }
 
-export async function readSession(config: Config, path = sessionPath(config.baseUrl), keyring = osKeyring) {
+export async function readSession(config: Config, path = sessionPath(config.baseUrl), keyring = osKeyring): Promise<Session> {
+  return withSessionLock(path, () => readUnlocked(config, path, keyring));
+}
+async function readUnlocked(config: Config, path: string, keyring: Keyring) {
   let stored: unknown;
   try {
     const info = await lstat(path);
@@ -93,10 +97,14 @@ export async function readSession(config: Config, path = sessionPath(config.base
   let session: Session;
   try { session = validateSession(stored, config.baseUrl); } catch { throw new SessionError(noSession); }
   // Legacy plaintext session: migrate it to encrypted storage now unless plaintext was explicitly requested.
-  if (!config.insecurePlaintextSession) await saveSession(session, path, { keyring });
+  if (!config.insecurePlaintextSession) await writeUnlocked(session, path, { keyring });
   return session;
 }
 export async function saveSession(session: Session, path = sessionPath(session.baseUrl),
+  options: { keyring?: Keyring; plaintext?: boolean } = {}) {
+  return withSessionLock(path, () => writeUnlocked(session, path, options));
+}
+async function writeUnlocked(session: Session, path: string,
   { keyring = osKeyring, plaintext = false }: { keyring?: Keyring; plaintext?: boolean } = {}) {
   validateSession(session, session.baseUrl);
   const contents = JSON.stringify(plaintext ? session : await encrypt(session, keyring));
@@ -109,6 +117,9 @@ export async function saveSession(session: Session, path = sessionPath(session.b
   } finally { await rm(temporary, { force: true }); }
 }
 export async function deleteSession(config: Config, path = sessionPath(config.baseUrl), keyring = osKeyring) {
+  return withSessionLock(path, () => deleteUnlocked(config, path, keyring));
+}
+async function deleteUnlocked(config: Config, path: string, keyring: Keyring) {
   await rm(path, { force: true });
   try { await keyring.delete(hostHash(config.baseUrl)); }
   catch {

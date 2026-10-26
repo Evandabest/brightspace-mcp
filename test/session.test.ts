@@ -161,3 +161,18 @@ test('logout removes both the session file and its keychain entry', () => withDi
   assert.deepEqual([...keyring.entries.keys()], ['unrelated']);
   await deleteSession(config, path, keyring);
 }));
+
+test('parallel legacy reads share one key and leave a decryptable encrypted file', () => withDirectory(async directory => {
+  const path = join(directory, 'session.json');
+  await writeFile(path, JSON.stringify(session), { mode: 0o600 });
+  const keyring = fakeKeyring();
+  let created = 0;
+  const originalGet = keyring.get;
+  keyring.get = async account => { const value = await originalGet(account); await new Promise(resolve => setTimeout(resolve, 30)); return value; };
+  const originalSet = keyring.set;
+  keyring.set = async (account, secret) => { created++; await originalSet(account, secret); };
+  const results = await Promise.all(Array.from({ length: 4 }, () => readSession(config, path, keyring)));
+  assert.ok(results.every(result => result.cookies[0].value === 'cookie-secret'));
+  assert.equal(created, 1);
+  assert.deepEqual(await readSession(config, path, keyring), session);
+}));
