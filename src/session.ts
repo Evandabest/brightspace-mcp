@@ -136,13 +136,25 @@ async function decrypt(envelope: z.infer<typeof envelopeSchema> | z.infer<typeof
 export async function readSession(config: Config, path = sessionPath(config.baseUrl), keyring = osKeyring, passphrase?: string): Promise<Session> {
   return sessionLock(path, () => readUnlocked(config, path, keyring, passphrase));
 }
-async function readUnlocked(config: Config, path: string, keyring: Keyring, passphrase?: string) {
-  let stored: unknown;
+async function readStoredSession(path: string): Promise<unknown> {
   try {
     const info = await lstat(path);
     if (!info.isFile() || (process.platform !== 'win32' && (info.mode & 0o077) !== 0)) throw new Error();
-    stored = JSON.parse(await readFile(path, 'utf8'));
+    return JSON.parse(await readFile(path, 'utf8'));
   } catch { throw new SessionError(noSession); }
+}
+
+/** Verify an existing encrypted session without migrating or rewriting it. */
+export async function verifySessionPassphrase(config: Config, passphrase: string, path = sessionPath(config.baseUrl)): Promise<void> {
+  await sessionLock(path, async () => {
+    const protectedSession = passphraseEnvelopeSchema.safeParse(await readStoredSession(path));
+    if (!protectedSession.success) throw new SessionError('No passphrase-protected Brightspace session. Run npm run login in your terminal.');
+    await decrypt(protectedSession.data, config.baseUrl, osKeyring, passphrase);
+  });
+}
+
+async function readUnlocked(config: Config, path: string, keyring: Keyring, passphrase?: string) {
+  const stored = await readStoredSession(path);
   const envelope = envelopeSchema.safeParse(stored);
   if (envelope.success) {
     if (config.sessionStorage !== 'keychain') throw new SessionError('This session uses the OS keychain. Run npm run login to save a new passphrase-protected session.');

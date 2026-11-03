@@ -1,6 +1,7 @@
 import { password } from '@inquirer/prompts';
 import { spawn } from 'node:child_process';
-import { setSessionPassphrase } from './session.js';
+import { loadConfig } from './config.js';
+import { setSessionPassphrase, verifySessionPassphrase } from './session.js';
 
 export async function promptSessionPassphrase(confirmNew = false): Promise<string> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error('Passphrase entry requires your own interactive terminal. Use npm run unlock -- <agent command>; never pass the secret in command-line arguments or .env.');
@@ -34,7 +35,11 @@ export async function launchUnlocked(command: string, args: string[], passphrase
 export async function runUnlock(args: string[]) {
   if (args[0] === '--') args = args.slice(1);
   if (!args.length) throw new Error('Usage: npm run unlock -- <agent command> [arguments]. Example: npm run unlock -- codex');
+  const config = loadConfig();
+  if (config.authMode === 'oauth') throw new Error('Passphrase unlock is not needed for OAuth authentication. Launch your agent directly.');
+  if (config.sessionStorage !== 'passphrase') throw new Error('Passphrase unlock is not needed for OS keychain storage. Launch your agent directly.');
   const passphrase = await promptSessionPassphrase();
+  await verifySessionPassphrase(config, passphrase);
   console.log('Starting your agent. Forward BRIGHTSPACE_SESSION_PASSPHRASE to the Brightspace MCP in its configuration. The passphrase is kept in process memory/environment only and is not saved.');
   process.exitCode = await launchUnlocked(args[0], args.slice(1), passphrase);
 }

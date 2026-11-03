@@ -111,7 +111,7 @@ This protects a copied session file without its key or passphrase. It does **not
    env_vars = ["BRIGHTSPACE_SESSION_PASSPHRASE"]
    ```
 
-4. Start the coding agent through the terminal wrapper, which asks for the passphrase each time:
+4. Start the coding agent through the terminal wrapper, which asks for the passphrase each time and verifies it against your saved encrypted session before launching:
 
    ```sh
    cd /absolute/path/to/brightspace-mcp
@@ -119,6 +119,13 @@ This protects a copied session file without its key or passphrase. It does **not
    ```
 
    Arguments after the command are forwarded directly. For example, `npm run unlock -- codex /path/to/coursework` starts Codex for another workspace. The wrapper launches the command without a shell, forwards terminal input/output, and preserves its exit status. It does not register the MCP automatically; use the normal registration instructions first.
+
+The wrapper exits with an error and does not launch the agent if the passphrase is incorrect or the encrypted session is missing or damaged.
+Rerun `npm run unlock -- <agent command>` to try another passphrase, or run `npm run login` to save a new session.
+Legacy plaintext sessions are also refused without modifying them; run `npm run login` to create a passphrase-protected session first.
+Verification is local and works offline; an expired school login is reported when you use the MCP tools.
+OAuth and OS keychain configurations do not need passphrase unlock: launch your agent directly instead.
+The wrapper rejects those configurations before prompting.
 
 The passphrase is held in the launched agent's runtime environment so it can start MCP subprocesses. The MCP consumes it into memory and removes it from its own `process.env`, reducing further inheritance. It is not saved by this project, but programs running as the same user may still inspect it. Noninteractive MCP processes never open a password prompt on protocol stdin. If no passphrase is forwarded, tools report that the session is locked. Fully restart the agent using the wrapper to unlock it. GUI clients that cannot forward a one-run secret should use the OS keychain mode instead.
 
@@ -291,7 +298,7 @@ npm run setup  # Interactive local configuration wizard
 npm run login  # Renew browser session using .env
 npm run logout # Remove saved browser session
 npm run unlock -- codex # Launch a terminal agent with a passphrase unlocked for this run
-npm run check  # Type-check and run tests
+npm run check  # Type-check source and all tests, then run unit tests
 npm run test:browser # Chromium tests with synthetic login pages
 npm run build  # Compile to dist/
 npm run dev   # Launch from source with externally supplied environment variables
