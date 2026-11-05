@@ -19,7 +19,7 @@
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "test": "node --import tsx --test test/*.test.ts",
-    "check": "tsc --noEmit && npm test",
+    "check": "tsc --project tsconfig.check.json && npm test",
     "setup": "npm run build && node --env-file-if-exists=.env dist/index.js setup",
     "login": "npm run build && node --env-file-if-exists=.env dist/index.js login",
     "logout": "npm run build && node --env-file-if-exists=.env dist/index.js logout",
